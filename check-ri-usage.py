@@ -3,9 +3,6 @@ import botocore
 import json
 from datetime import datetime, date, timedelta
 import csv
-import StringIO
-import thread
-
 
 def json_serial(obj):
     if isinstance(obj, (datetime, date)):
@@ -92,7 +89,7 @@ def main():
     for key in KEYS:
         print 'Processing %s...' % key['name']
         try:
-            session = boto3.Session(aws_access_key_id=key['key'], aws_secret_access_key=key['secret'])
+            session = boto3.Session(aws_access_key_id=key['key'], aws_secret_access_key=key['secret'], region_name="us-east-1")
             regions = get_regions(session)
             instances += get_instances(key['name'], session, regions)
             reservations += get_reservations(key['name'], session, regions)
