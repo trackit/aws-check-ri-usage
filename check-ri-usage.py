@@ -3,6 +3,9 @@ import botocore
 import json
 from datetime import datetime, date, timedelta
 import csv
+import ConfigParser
+import os
+import argparse
 
 def json_serial(obj):
     if isinstance(obj, (datetime, date)):
@@ -66,37 +69,58 @@ def check_used_ri(instances, reservations):
         reservation['Unused'] = to_use
     return reservations
 
-def generate_csv(data, header_name):
-    with open('report.csv', 'wb') as file:
+def generate_csv(data, args, header_name):
+    filename = "report.csv"
+    if args['o']:
+        filename = args['o']
+    with open(filename, 'wb') as file:
         writer = csv.DictWriter(file, header_name)
         writer.writeheader()
         for row in data:
             writer.writerow(row)
 
-KEYS = [
-    {
-        'name': '',
-        'key': '',
-        'secret': '',
-    },
-]
-
+def init():
+    config_path = '/root/.aws/credentials'
+    aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+    aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    aws_region = os.environ.get('AWS_DEFAULT_REGION')
+    if aws_access_key and aws_secret_key and aws_region:
+        config_file = open(config_path, 'w')
+        config = ConfigParser.RawConfigParser()
+        config.add_section('key1')
+        config.set('key1', 'aws_access_key_id', aws_access_key)
+        config.set('key1', 'aws_secret_access_key', aws_secret_key)
+        config.set('key1', 'region', aws_region)
+        config.write(config_file)
+        return config.sections()
+    parser = ConfigParser.ConfigParser()
+    parser.read(config_path)
+    if parser.sections():
+        return parser.sections()
+    return []
 
 def main():
-    data = []
     instances = []
     reservations = []
-    for key in KEYS:
-        print 'Processing %s...' % key['name']
+    parser = argparse.ArgumentParser(description="Analyse reserved instances")
+    parser.add_argument("--profile", nargs="+", help="Specify AWS profile(s) (stored in ~/.aws/credentials) for the program to use")
+    parser.add_argument("-o", nargs="?", help="Specify output csv file")
+    args = vars(parser.parse_args())
+    if args['profile']:
+        keys = args['profile']
+    else:
+        keys = init()
+    for key in keys:
+        print 'Processing %s...' % key
         try:
-            session = boto3.Session(aws_access_key_id=key['key'], aws_secret_access_key=key['secret'], region_name="us-east-1")
+            session = boto3.Session(profile_name=key)
             regions = get_regions(session)
-            instances += get_instances(key['name'], session, regions)
-            reservations += get_reservations(key['name'], session, regions)
+            instances += get_instances(key, session, regions)
+            reservations += get_reservations(key, session, regions)
         except botocore.exceptions.ClientError, error:
             print error
     result = check_used_ri(instances, reservations)
-    generate_csv(result, ['Account', 'region', 'OfferingType', 'InstanceType', 'InstanceCount', 'End', 'Unused'])
+    generate_csv(result, args, ['Account', 'region', 'OfferingType', 'InstanceType', 'InstanceCount', 'End', 'Unused'])
     print json.dumps(result, indent=4, default=json_serial)
 
 if __name__ == '__main__':
