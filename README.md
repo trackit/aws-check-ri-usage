@@ -1,4 +1,4 @@
-# List all your AWS resources that are publicly exposed
+# List your EC2 reservations and your usage of them
 
 This tool allow for listing and exporting your EC2 reserved instances.
 
